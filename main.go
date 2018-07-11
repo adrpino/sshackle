@@ -95,11 +95,13 @@ func main() {
 	flag.Parse()
 	ip, err := newFileScanner(*ipFile)
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		return
 	}
 	pass, err := newFileScanner(*passFile)
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		return
 	}
 	resCh := make(chan *AuthResult)
 	attempts := 0
