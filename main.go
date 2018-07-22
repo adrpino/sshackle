@@ -30,6 +30,7 @@ type AuthResult struct {
 type fileScanner struct {
 	File    *os.File
 	Scanner *bufio.Scanner
+	Values  []string
 }
 
 func newFileScanner(path string) (*fileScanner, error) {
@@ -41,6 +42,18 @@ func newFileScanner(path string) (*fileScanner, error) {
 	scanner.Split(bufio.ScanLines)
 	fScanner := &fileScanner{File: file, Scanner: scanner}
 	return fScanner, nil
+}
+
+func (f *fileScanner) Load() {
+	scanner := bufio.NewScanner(f.File)
+	scanner.Split(bufio.ScanLines)
+	var values []string
+	for scanner.Scan() {
+		value := scanner.Text()
+		values = append(values, value)
+	}
+	f.Values = values
+
 }
 
 // Creates a ssh client with a routed *net.Conn
@@ -103,6 +116,7 @@ func main() {
 		fmt.Println(err.Error())
 		return
 	}
+	pass.Load()
 	resCh := make(chan *AuthResult)
 	attempts := 0
 	checked := 0
@@ -111,12 +125,14 @@ func main() {
 	defer ip.File.Close()
 	defer pass.File.Close()
 	for ip.Scanner.Scan() {
-		for pass.Scanner.Scan() {
+		for _, passwd := range pass.Values {
+			//for pass.Scanner.Scan() {
 			ipAddr := ip.Scanner.Text()
-			passwd := pass.Scanner.Text()
+			//passwd := pass.Scanner.Text()
 			if err := ip.Scanner.Err(); err != nil {
 				return
 			}
+			//fmt.Println("trying ", ipAddr, passwd)
 			go sshDialer(ipAddr, *port, "pi", passwd, resCh)
 			attempts++
 		}
